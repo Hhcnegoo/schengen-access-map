@@ -67,4 +67,4 @@ An empty cell means the source cell is empty. It is not zero. A sum skips
 empty cells and is itself empty when every cell in the group is empty. A ratio
 is empty when a cell it needs is empty or when its denominator is zero.
 
-See `docs/METHODOLOGY.md` for sources, checks and known limitations.
+See the repository README for sources, checks and known limitations.
