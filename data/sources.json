@@ -1,0 +1,69 @@
+{
+  "publisher": "European Commission, Directorate-General for Migration and Home Affairs",
+  "source_page": "https://home-affairs.ec.europa.eu/policies/schengen/visa-policy/short-stay-visas-issued-schengen-countries_en",
+  "files": [
+    {
+      "year": 2019,
+      "url": "https://home-affairs.ec.europa.eu/document/download/f2681462-3c3d-487e-9627-9386e353396c_en?filename=2019-consulates-schengen-visa-stats.xlsx",
+      "source_filename": "2019-consulates-schengen-visa-stats.xlsx",
+      "local_filename": "consulates_2019.xlsx",
+      "sha256": "e39786cff570b45582137d42e2a3d1f9fb5bbf880365711ecd1b19128002cfb2",
+      "bytes": 604009,
+      "retrieved": "2026-11-15"
+    },
+    {
+      "year": 2020,
+      "url": "https://home-affairs.ec.europa.eu/document/download/f9e61412-73b6-4415-a350-ab53e0300573_en?filename=Visa-statistics-for-consulates-2020_en.xlsx",
+      "source_filename": "Visa-statistics-for-consulates-2020_en.xlsx",
+      "local_filename": "consulates_2020.xlsx",
+      "sha256": "699a25d04b1f485acec475d8880a8d3af1e59967e47838143966710d670b16e1",
+      "bytes": 538349,
+      "retrieved": "2026-11-15"
+    },
+    {
+      "year": 2021,
+      "url": "https://home-affairs.ec.europa.eu/document/download/b4177e6c-90d3-4590-bca4-97c255542ae2_en?filename=2021-consulates-schengen-visa-stats.xlsx",
+      "source_filename": "2021-consulates-schengen-visa-stats.xlsx",
+      "local_filename": "consulates_2021.xlsx",
+      "sha256": "dc46684fca2c2c8c306ba530eea264f792bafde8217b923431ada6831cd3d1f6",
+      "bytes": 546189,
+      "retrieved": "2026-11-15"
+    },
+    {
+      "year": 2022,
+      "url": "https://home-affairs.ec.europa.eu/document/download/9c7b5dab-dde0-43dc-aa7e-71f653c3e4ca_en?filename=Visa%20statistics%20for%20consulates%20in%202022_en.xlsx",
+      "source_filename": "Visa statistics for consulates in 2022_en.xlsx",
+      "local_filename": "consulates_2022.xlsx",
+      "sha256": "1397febf8dcd009afe87a39677e55afd4576508c5b8921523f209d4f7f2a7bf6",
+      "bytes": 595468,
+      "retrieved": "2026-11-15"
+    },
+    {
+      "year": 2023,
+      "url": "https://home-affairs.ec.europa.eu/document/download/87716634-be5e-4920-9358-495a95429759_en?filename=2023-schengen-visa-statistics-consulates_en.xlsx.xlsx",
+      "source_filename": "2023-schengen-visa-statistics-consulates_en.xlsx.xlsx",
+      "local_filename": "consulates_2023.xlsx",
+      "sha256": "2d3e98dd8fa0a158eedc89a4eeca8af3d4bfc65d999d94bc47e0b7766c45d721",
+      "bytes": 558365,
+      "retrieved": "2026-11-15"
+    },
+    {
+      "year": 2024,
+      "url": "https://home-affairs.ec.europa.eu/document/download/6552447c-1d75-4f7c-bed6-1bd17a5d59f8_en?filename=2024-schengen-visa-statistics-consulates_en.xlsx",
+      "source_filename": "2024-schengen-visa-statistics-consulates_en.xlsx",
+      "local_filename": "consulates_2024.xlsx",
+      "sha256": "b7f1acd7889abbbb1d018708c50af5f8636a5fd877d45ded38f8880af51f07ba",
+      "bytes": 558784,
+      "retrieved": "2026-11-15"
+    },
+    {
+      "year": 2025,
+      "url": "https://home-affairs.ec.europa.eu/document/download/56816949-e59f-442b-9091-5d03360bf860_en",
+      "source_filename": "2025-consulates-schengen-visa-statistics.xlsx",
+      "local_filename": "consulates_2025.xlsx",
+      "sha256": "d1c134ab23ee0d25a03e8be00e05757b49412ec05114e80b5fec5a2afff4bbbf",
+      "bytes": 512813,
+      "retrieved": "2026-11-15"
+    }
+  ]
+}
