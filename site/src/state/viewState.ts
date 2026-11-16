@@ -28,21 +28,16 @@ function oneOf<T extends string>(value: string | null, options: readonly T[]): T
   return options.find((option) => option === value);
 }
 
-export function defaultLocale(languages: readonly string[]): Locale {
-  return languages.some((language) => language.toLowerCase().startsWith('ru')) ? 'ru' : 'en';
-}
+/** Language shown unless the URL asks for another one. */
+export const DEFAULT_LOCALE: Locale = 'en';
 
 /** Read the view state from a URL hash such as `#lang=ru&year=2024`. */
-export function parseViewState(
-  hash: string,
-  dataset: Dataset,
-  languages: readonly string[],
-): ViewState {
+export function parseViewState(hash: string, dataset: Dataset): ViewState {
   const params = new URLSearchParams(hash.replace(/^#/, ''));
   const year = Number(params.get('year'));
   const selection = params.get('country') ?? '';
   return {
-    locale: oneOf(params.get('lang'), LOCALES) ?? defaultLocale(languages),
+    locale: oneOf(params.get('lang'), LOCALES) ?? DEFAULT_LOCALE,
     year: dataset.years.includes(year) ? year : Math.max(...dataset.years),
     metric: oneOf(params.get('metric'), MAP_METRICS) ?? 'uniform_applied',
     selection: dataset.isCountry(selection) ? selection : ALL_COUNTRIES,

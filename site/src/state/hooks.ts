@@ -9,7 +9,7 @@ import type { ViewState } from './viewState';
 /** View state kept in the URL hash, so that a view can be linked to. */
 export function useViewState(dataset: Dataset): [ViewState, (patch: Partial<ViewState>) => void] {
   const read = useCallback(
-    () => parseViewState(window.location.hash, dataset, window.navigator.languages ?? []),
+    () => parseViewState(window.location.hash, dataset),
     [dataset],
   );
   const [state, setState] = useState<ViewState>(read);
