@@ -48,7 +48,17 @@ const en = {
   'map.view.countries': 'Countries of consulate location',
   'map.view.states': 'Schengen States',
   'map.caption.countries': 'Consulates of all listed Schengen States, by country where they are located.',
-  'map.caption.states': 'Consulates located in {selection}, by Schengen State that operates them.',
+  'map.caption.states':
+    'Location of consulates: {selection}. Coloured by the Schengen State that operates them.',
+  'map.hint':
+    'Rest the pointer on a coloured country to zoom in on it, then click it to see its figures. On a touch screen, tap the country. Drag the globe to turn it.',
+  'map.zoomIn': 'Zoom in',
+  'map.zoomOut': 'Zoom out',
+  'map.reset': 'Show the whole globe',
+  'map.info.title': '{name}, {year}',
+  'map.info.located': 'Location of consulates: {selection}',
+  'map.info.notListed': 'The source lists no consulate of this State for this selection and year.',
+  'map.info.details': 'More figures below',
   'map.loading': 'Loading the map…',
   'map.error': 'The map could not be loaded. The tables below hold the same figures.',
   'map.aria': 'Map: {metric}, {year}',
@@ -201,7 +211,17 @@ const ru: Record<MessageKey, string> = {
   'map.caption.countries':
     'Консульства всех перечисленных в источнике государств Шенгенской зоны — по стране, где они расположены.',
   'map.caption.states':
-    'Консульства, расположенные в выбранной стране ({selection}), — по государству Шенгенской зоны, которому они принадлежат.',
+    'Расположение консульств: {selection}. Цвет — по государству Шенгенской зоны, которому принадлежат консульства.',
+  'map.hint':
+    'Задержите курсор на закрашенной стране, чтобы приблизить её, затем нажмите на неё, чтобы увидеть данные. На сенсорном экране коснитесь страны. Глобус можно поворачивать перетаскиванием.',
+  'map.zoomIn': 'Приблизить',
+  'map.zoomOut': 'Отдалить',
+  'map.reset': 'Показать весь глобус',
+  'map.info.title': '{name}, {year}',
+  'map.info.located': 'Расположение консульств: {selection}',
+  'map.info.notListed':
+    'В источнике нет консульств этого государства для этой выборки и года.',
+  'map.info.details': 'Больше данных ниже',
   'map.loading': 'Карта загружается…',
   'map.error': 'Не удалось загрузить карту. Те же данные приведены в таблицах ниже.',
   'map.aria': 'Карта: {metric}, {year}',

@@ -54,6 +54,11 @@ Every figure on the site is read from `data/processed/site_data.json`. The
 site makes no request to another origin: fonts are system fonts and the map
 comes from the bundled `world-atlas` TopoJSON.
 
+The map is a globe (orthographic projection, `d3-geo`). Resting the pointer
+on a coloured country, or moving keyboard focus to it, turns and zooms the
+globe to that country; a click or tap shows its figures. The globe can be
+dragged and returns to the whole-Earth view when the pointer leaves.
+
 ### Deployment
 
 The workflow deploys `site/dist` to GitHub Pages on every push to `main`.

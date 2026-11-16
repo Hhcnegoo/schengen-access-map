@@ -81,17 +81,49 @@ describe('page', () => {
     expect(window.location.hash).toBe('#lang=en&year=2021&metric=not_issued_rate&country=KAZ&view=countries');
   });
 
-  it('draws the map from the bundled atlas with one area per country', async () => {
+  it('draws the globe from the bundled atlas with one area per country', async () => {
     open('#lang=en&year=2024&metric=uniform_applied&country=ALL&view=countries');
     const map = await screen.findByRole('group', { name: 'Map: Uniform visas applied for, 2024' }, { timeout: 10000 });
     const areas = within(map).getAllByRole('button');
     expect(areas).toHaveLength(dataset.countries.length);
+    for (const area of areas) expect(area.getAttribute('d')).toMatch(/^M/);
     const russia = areas.find((area) => area.getAttribute('aria-label')?.startsWith('Show Russia'))!;
     expect(russia.getAttribute('aria-label')).toContain(
       formatCount(dataset.countrySummary('RUS', 2024)!.uniform_applied!, 'en'),
     );
-    fireEvent.click(russia);
+  });
+
+  it('shows the figures of a country when it is clicked on the globe', async () => {
+    open('#lang=en&year=2024&metric=uniform_applied&country=ALL&view=countries');
+    const map = await screen.findByRole('group', { name: /^Map:/ }, { timeout: 10000 });
+    const panel = screen.getByRole('complementary');
+    expect(within(panel).queryByRole('heading')).toBeNull();
+    expect(panel.textContent).toContain('click it to see its figures');
+
+    fireEvent.click(within(map).getByRole('button', { name: /^Show Russia/ }));
+    expect(within(panel).getByRole('heading', { name: 'Russia, 2024' })).toBeTruthy();
+    const row = dataset.countrySummary('RUS', 2024)!;
+    expect(within(panel).getByText(formatCount(row.uniform_applied!, 'en'))).toBeTruthy();
+    expect(within(panel).getByText(formatPercent(row.not_issued_rate!, 'en'))).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: 'Russia, 2024' })).toBeTruthy();
+    expect(window.location.hash).toContain('country=RUS');
+  });
+
+  it('shows the figures of a Schengen State clicked in the States view', async () => {
+    open('#lang=en&year=2019&metric=uniform_applied&country=ARM&view=states');
+    const map = await screen.findByRole('group', { name: /^Map:/ }, { timeout: 10000 });
+    const rows = dataset.stateRows('ARM', 2019);
+    expect(within(map).getAllByRole('button')).toHaveLength(rows.length);
+
+    fireEvent.click(within(map).getByRole('button', { name: /^Show Czechia/ }));
+    const panel = screen.getByRole('complementary');
+    expect(within(panel).getByRole('heading', { name: 'Czechia, 2019' })).toBeTruthy();
+    expect(panel.textContent).toContain('Location of consulates: Armenia');
+    expect(within(panel).getByText('3,074')).toBeTruthy();
+    // The LTV cell of this row is empty in the source.
+    expect(within(panel).getByText('no data')).toBeTruthy();
+    // The selected country itself does not change.
+    expect(screen.getByRole('heading', { level: 2, name: 'Armenia, 2019' })).toBeTruthy();
   });
 });
 

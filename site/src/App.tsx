@@ -1,21 +1,35 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { BreakdownTable } from './components/BreakdownTable';
 import { CompareTable } from './components/CompareTable';
 import { Controls } from './components/Controls';
+import { Globe } from './components/Globe';
+import type { GlobeRegion } from './components/Globe';
+import { InfoPanel } from './components/InfoPanel';
+import type { InfoRow } from './components/InfoPanel';
 import { MapLegend } from './components/MapLegend';
-import { MapView } from './components/MapView';
-import type { MapRegion } from './components/MapView';
 import { Methodology } from './components/Methodology';
 import { StatTiles } from './components/StatTiles';
 import { TrendCharts } from './components/TrendCharts';
 import type { Dataset } from './data/dataset';
-import { LOCALES } from './i18n/format';
+import type { MeasureField, Measures } from './data/types';
+import { LOCALES, formatCount } from './i18n/format';
 import { I18nProvider, useI18n } from './i18n/I18nContext';
-import { labelFor } from './map/labels';
-import { useColorMode, useMapShapes, useViewState } from './state/hooks';
+import { HOME_CENTRE, labelFor } from './map/labels';
+import { useAtlas, useColorMode, useViewState } from './state/hooks';
 import { MAP_VIEWS } from './state/viewState';
 import type { ViewState } from './state/viewState';
 import { buildColorScale } from './viz/colorScale';
+
+/** Figures listed for the country chosen on the globe, in reading order. */
+const INFO_FIELDS: readonly MeasureField[] = [
+  'uniform_applied',
+  'uniform_issued',
+  'uniform_not_issued',
+  'not_issued_rate',
+  'mev_issued',
+  'mev_share',
+  'ltv_issued',
+];
 
 type PageProps = {
   dataset: Dataset;
@@ -27,7 +41,9 @@ function Page({ dataset, state, update }: PageProps) {
   const { t, name, measure } = useI18n();
   const { year, metric, selection, view, locale } = state;
   const mode = useColorMode();
-  const shapes = useMapShapes();
+  const atlas = useAtlas();
+  // Schengen State chosen on the globe in the "Schengen States" view.
+  const [pickedState, setPickedState] = useState<string | null>(null);
 
   const selectedCountry = dataset.country(selection);
   const selectionName = selectedCountry ? name(selectedCountry) : t('controls.allCountries');
@@ -54,7 +70,7 @@ function Page({ dataset, state, update }: PageProps) {
     [dataset, metric, selection, mode],
   );
 
-  const regions = useMemo<MapRegion[]>(() => {
+  const regions = useMemo<GlobeRegion[]>(() => {
     if (view === 'countries') {
       return dataset.countries.map((country) => {
         const value = dataset.countrySummary(country.iso3, year)?.[metric] ?? null;
@@ -80,6 +96,47 @@ function Page({ dataset, state, update }: PageProps) {
       };
     });
   }, [dataset, view, selection, year, metric, name, measure]);
+
+  const picked = view === 'states' && pickedState ? dataset.state(pickedState) : undefined;
+  const pickedRow = picked
+    ? dataset.stateRows(selection, year).find((row) => row.schengen_state_iso2 === picked.iso2)
+    : undefined;
+  const infoRows = (row: Measures): InfoRow[] =>
+    INFO_FIELDS.map((field) => ({
+      label: t(`metric.${field}`),
+      value: measure(field, row[field]),
+      missing: row[field] === null,
+    }));
+  const info =
+    view === 'countries'
+      ? selectedCountry && summary
+        ? {
+            title: t('map.info.title', { name: selectionName, year }),
+            rows: infoRows(summary),
+            footer: (
+              <p className="note">
+                <a href="#detail-title">{t('map.info.details')}</a>
+              </p>
+            ),
+          }
+        : { title: null, rows: [] }
+      : picked
+        ? {
+            title: t('map.info.title', { name: name(picked), year }),
+            subtitle: t('map.info.located', { selection: selectionName }),
+            rows: pickedRow
+              ? [
+                  ...infoRows(pickedRow),
+                  {
+                    label: t('states.column.entries'),
+                    value: formatCount(pickedRow.consulate_entries, locale),
+                    missing: false,
+                  },
+                ]
+              : [],
+            message: pickedRow ? undefined : t('map.info.notListed'),
+          }
+        : { title: null, rows: [] };
 
   return (
     <>
@@ -145,35 +202,45 @@ function Page({ dataset, state, update }: PageProps) {
               ? t('map.caption.countries')
               : t('map.caption.states', { selection: selectionName })}
           </p>
-          {shapes.status === 'ready' ? (
-            <MapView
-              shapes={shapes.shapes}
-              regions={regions}
-              scale={view === 'countries' ? countryScale : stateScale}
-              selectedId={view === 'countries' ? (selectedCountry?.iso_n3 ?? null) : null}
-              contextRegion={
-                view === 'states' && selectedCountry
-                  ? {
-                      id: selectedCountry.iso_n3,
-                      name: selectionName,
-                      label: labelFor(selectedCountry.iso3),
-                    }
-                  : null
-              }
-              ariaLabel={t('map.aria', { metric: metricName, year })}
-              tooltipContext={`${metricName}, ${year}`}
-              {...(view === 'countries'
-                ? {
-                    onSelect: (key: string) => update({ selection: key }),
-                    selectLabel: (regionName: string) => t('map.select', { name: regionName }),
-                  }
-                : {})}
-            />
-          ) : (
-            <div className="map-frame is-placeholder" role="status">
-              {shapes.status === 'loading' ? t('map.loading') : t('map.error')}
-            </div>
-          )}
+          <div className="globe-layout">
+            {atlas.status === 'ready' ? (
+              <Globe
+                atlas={atlas.atlas}
+                regions={regions}
+                scale={view === 'countries' ? countryScale : stateScale}
+                mode={mode}
+                selectedId={
+                  view === 'countries' ? (selectedCountry?.iso_n3 ?? null) : (picked?.iso_n3 ?? null)
+                }
+                contextRegion={
+                  view === 'states' && selectedCountry
+                    ? {
+                        id: selectedCountry.iso_n3,
+                        name: selectionName,
+                        label: labelFor(selectedCountry.iso3),
+                      }
+                    : null
+                }
+                home={HOME_CENTRE[view]}
+                ariaLabel={t('map.aria', { metric: metricName, year })}
+                tooltipContext={`${metricName}, ${year}`}
+                text={{
+                  zoomIn: t('map.zoomIn'),
+                  zoomOut: t('map.zoomOut'),
+                  reset: t('map.reset'),
+                  select: (regionName) => t('map.select', { name: regionName }),
+                }}
+                onSelect={(key) =>
+                  view === 'countries' ? update({ selection: key }) : setPickedState(key)
+                }
+              />
+            ) : (
+              <div className="globe-frame is-placeholder" role="status">
+                {atlas.status === 'loading' ? t('map.loading') : t('map.error')}
+              </div>
+            )}
+            <InfoPanel {...info} hint={t('map.hint')} />
+          </div>
           <MapLegend
             field={metric}
             scale={view === 'countries' ? countryScale : stateScale}

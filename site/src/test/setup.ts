@@ -16,3 +16,6 @@ class ResizeObserverStub {
 }
 
 globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+
+// jsdom has no canvas; the globe skips painting when there is no context.
+HTMLCanvasElement.prototype.getContext = (() => null) as typeof HTMLCanvasElement.prototype.getContext;

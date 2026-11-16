@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { Dataset } from '../data/dataset';
-import type { MapShape } from '../map/atlas';
-import { loadShapes } from '../map/atlas';
+import type { GlobeAtlas } from '../map/atlas';
+import { loadAtlas } from '../map/atlas';
 import type { ColorMode } from '../viz/colorScale';
 import { parseViewState, serializeViewState } from './viewState';
 import type { ViewState } from './viewState';
@@ -48,19 +48,19 @@ export function useColorMode(): ColorMode {
   return mode;
 }
 
-export type ShapesState =
+export type AtlasState =
   | { status: 'loading' }
-  | { status: 'ready'; shapes: MapShape[] }
+  | { status: 'ready'; atlas: GlobeAtlas }
   | { status: 'error' };
 
 /** Load the bundled atlas once. */
-export function useMapShapes(): ShapesState {
-  const [state, setState] = useState<ShapesState>({ status: 'loading' });
+export function useAtlas(): AtlasState {
+  const [state, setState] = useState<AtlasState>({ status: 'loading' });
   useEffect(() => {
     let cancelled = false;
-    loadShapes()
-      .then((shapes) => {
-        if (!cancelled) setState({ status: 'ready', shapes });
+    loadAtlas()
+      .then((atlas) => {
+        if (!cancelled) setState({ status: 'ready', atlas });
       })
       .catch(() => {
         if (!cancelled) setState({ status: 'error' });

@@ -11,8 +11,11 @@
   --border: rgba(11, 11, 11, 0.1);
   --series-1: #2a78d6;
   --accent-ink: #1c5cab;
-  --map-land: #e9e8e3;
-  --map-hatch: #b9b8b0;
+  --map-land: #dddcd5;
+  --map-hatch: #a9a8a0;
+  --globe-ocean: #f1f1ee;
+  --globe-graticule: #e4e3dd;
+  --globe-border: #f1f1ee;
   --focus: #0b0b0b;
   --wash: rgba(11, 11, 11, 0.05);
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -31,8 +34,11 @@
     --border: rgba(255, 255, 255, 0.1);
     --series-1: #3987e5;
     --accent-ink: #86b6ef;
-    --map-land: #2c2c2a;
-    --map-hatch: #5a5954;
+    --map-land: #30302d;
+    --map-hatch: #5f5e58;
+    --globe-ocean: #121211;
+    --globe-graticule: #1f1f1d;
+    --globe-border: #121211;
     --focus: #f0efec;
     --wash: rgba(255, 255, 255, 0.07);
   }
@@ -232,32 +238,121 @@ select {
   gap: 12px;
 }
 
-/* Map */
-.map-frame {
-  position: relative;
+/* Globe */
+.globe-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 600px) minmax(220px, 1fr);
+  gap: 16px 28px;
+  align-items: start;
   margin-top: 12px;
 }
 
-.map-frame.is-placeholder {
-  aspect-ratio: 16 / 9;
+.globe-frame {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  aspect-ratio: 1;
+  margin: 0 auto;
+  /* Horizontal drags turn the globe; vertical swipes still scroll the page. */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grab;
+}
+
+.globe-frame:active {
+  cursor: grabbing;
+}
+
+.globe-frame.is-placeholder {
   display: grid;
   place-items: center;
   color: var(--text-secondary);
   border: 1px solid var(--grid);
-  border-radius: 8px;
+  border-radius: 50%;
+  cursor: default;
 }
 
-.map {
+.globe-canvas,
+.globe-shapes {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
-  height: auto;
-  border-radius: 8px;
+  height: 100%;
+  border-radius: 10px;
 }
 
-.map-land {
-  fill: var(--map-land);
-  stroke: var(--surface);
-  stroke-width: 0.6;
+.globe-buttons {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.globe-buttons button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 1.125rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.globe-buttons button:hover {
+  background: var(--page);
+}
+
+.globe-info {
+  min-width: 0;
+}
+
+.globe-info h3 {
+  margin-top: 0;
+  font-size: 1.125rem;
+}
+
+.info-rows {
+  margin-top: 12px;
+  font-size: 0.875rem;
+}
+
+.info-rows > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--grid);
+}
+
+.info-rows dt {
+  color: var(--text-secondary);
+}
+
+.info-rows dd {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.info-rows dd.is-no-data {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.globe-hint {
+  margin-top: 14px;
+}
+
+@media (max-width: 860px) {
+  .globe-layout {
+    grid-template-columns: 1fr;
+  }
 }
 
 .map-context {
@@ -274,7 +369,7 @@ select {
   outline: none;
 }
 
-.map-region.is-selectable,
+.map-region,
 .map-marker-hit {
   cursor: pointer;
 }
@@ -313,7 +408,7 @@ select {
 }
 
 .map-labels text {
-  font-size: 12px;
+  font-size: var(--label-size, 12px);
   font-weight: 600;
   fill: var(--text-primary);
   stroke: var(--surface);
