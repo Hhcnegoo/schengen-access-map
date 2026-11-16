@@ -51,13 +51,16 @@ npm run build      # type-check and build into site/dist
 ```
 
 Every figure on the site is read from `data/processed/site_data.json`. The
-site makes no request to another origin: fonts are system fonts and the map
-comes from the bundled `world-atlas` TopoJSON.
+site makes no request to another origin: the fonts (Manrope and JetBrains
+Mono, SIL Open Font License) and the `world-atlas` TopoJSON are bundled.
 
 The map is a globe (orthographic projection, `d3-geo`). Resting the pointer
 on a coloured country, or moving keyboard focus to it, turns and zooms the
 globe to that country; a click or tap shows its figures. The globe can be
-dragged and returns to the whole-Earth view when the pointer leaves.
+dragged, glides when released, and returns to the whole-Earth view when the
+pointer leaves. The play button steps through the years. Light and dark
+themes follow the operating system, and motion is switched off when the
+system asks for reduced motion.
 
 ### Deployment
 

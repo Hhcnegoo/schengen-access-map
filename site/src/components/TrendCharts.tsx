@@ -1,9 +1,9 @@
 import { scaleLinear } from 'd3-scale';
 import { useState } from 'react';
 import {
+  Area,
+  AreaChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ReferenceDot,
   ResponsiveContainer,
   Tooltip,
@@ -90,8 +90,14 @@ function MiniTrend({ field, rows, year }: { field: MeasureField; rows: Row[]; ye
   return (
     <figure className="mini-chart">
       <figcaption>{t(`metric.${field}`)}</figcaption>
-      <ResponsiveContainer width="100%" height={176}>
-        <LineChart data={rows} margin={{ top: 24, right: 16, bottom: 0, left: 0 }}>
+      <ResponsiveContainer width="100%" height={184}>
+        <AreaChart data={rows} margin={{ top: 26, right: 16, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id={`trend-wash-${field}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="var(--series-1)" stopOpacity={0.22} />
+              <stop offset="1" stopColor="var(--series-1)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
           <CartesianGrid vertical={false} stroke="var(--grid)" />
           <XAxis
             dataKey="year"
@@ -102,7 +108,7 @@ function MiniTrend({ field, rows, year }: { field: MeasureField; rows: Row[]; ye
             padding={{ left: 18, right: 18 }}
           />
           <YAxis
-            width={48}
+            width={locale === 'ru' ? 62 : 48}
             ticks={axis.ticks}
             domain={axis.domain}
             tickLine={false}
@@ -115,17 +121,31 @@ function MiniTrend({ field, rows, year }: { field: MeasureField; rows: Row[]; ye
             cursor={{ stroke: 'var(--axis)', strokeWidth: 1 }}
             isAnimationActive={false}
           />
-          <Line
+          <Area
             type="linear"
             dataKey={field}
             stroke="var(--series-1)"
             strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"
-            dot={{ r: 4, fill: 'var(--series-1)', stroke: 'var(--surface)', strokeWidth: 2 }}
-            activeDot={{ r: 5.5, fill: 'var(--series-1)', stroke: 'var(--surface)', strokeWidth: 2 }}
+            fill={`url(#trend-wash-${field})`}
+            dot={{
+              r: 4.5,
+              fill: 'var(--series-1)',
+              fillOpacity: 1,
+              stroke: 'var(--surface-sunken)',
+              strokeWidth: 1.5,
+            }}
+            activeDot={{
+              r: 6,
+              fill: 'var(--series-1)',
+              fillOpacity: 1,
+              stroke: 'var(--surface-sunken)',
+              strokeWidth: 1.5,
+            }}
             connectNulls={false}
-            isAnimationActive={false}
+            animationDuration={700}
+            animationEasing="ease-out"
           />
           {currentValue !== null ? (
             <ReferenceDot
@@ -138,7 +158,7 @@ function MiniTrend({ field, rows, year }: { field: MeasureField; rows: Row[]; ye
               label={renderCurrentLabel}
             />
           ) : null}
-        </LineChart>
+        </AreaChart>
       </ResponsiveContainer>
     </figure>
   );

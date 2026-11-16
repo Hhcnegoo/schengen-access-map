@@ -42,15 +42,17 @@ type Props = {
   onSelect: (key: string) => void;
 };
 
-type Tip = { region: GlobeRegion; x: number; y: number; flip: boolean };
 type Point = { x: number; y: number };
+type Flight = { duration?: number; ease?: (t: number) => number; whenDone?: () => void };
 
 /** Time the pointer rests on a country before the globe zooms in on it. */
 const HOVER_DELAY_MS = 140;
 /** Time after the pointer leaves before the globe shows the whole Earth again. */
-const LEAVE_DELAY_MS = 700;
-const FLIGHT_MS = 650;
-const BUTTON_ZOOM_MS = 260;
+const LEAVE_DELAY_MS = 650;
+const FOCUS_MS = 900;
+const HOME_MS = 1000;
+const ENTRANCE_MS = 1700;
+const BUTTON_ZOOM_MS = 320;
 const BUTTON_ZOOM_FACTOR = 1.7;
 /** Pointer travel that turns a press into a drag. */
 const DRAG_THRESHOLD = 4;
@@ -64,17 +66,25 @@ const REARM_DISTANCE = 8;
 const SMALL_AREA = 70;
 /** Projected area from which a country's name is written on it. */
 const LABEL_AREA = 1100;
-const MARKER_RADIUS = 5;
+const MARKER_RADIUS = 4.5;
+/** Angle from the centre beyond which a point is on the far side. */
 const HORIZON = Math.PI / 2 - 0.03;
+/** How quickly a released globe slows down (time constant). */
+const GLIDE_MS = 340;
+/** Slowest turn, in degrees per millisecond, that still glides after release. */
+const GLIDE_MIN_SPEED = 0.012;
 const GRATICULE = geoGraticule10();
-const SPHERE = { type: 'Sphere' } as const;
+const CENTRE = GLOBE_SIZE / 2;
 
-function easeInOut(t: number): number {
-  return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
-}
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+const easeOut = (t: number) => 1 - (1 - t) ** 4;
 
 function clampZoom(zoom: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom));
+}
+
+function wrapLongitude(longitude: number): number {
+  return ((((longitude + 180) % 360) + 360) % 360) - 180;
 }
 
 function regionIdAt(target: EventTarget | null): string | null {
@@ -93,12 +103,13 @@ function prefersReducedMotion(): boolean {
 /**
  * The whole Earth as a globe. Resting the pointer on a coloured country (or
  * moving keyboard focus to it) turns and zooms the globe to that country;
- * clicking it reports the selection. The globe can be dragged, and zooms out
- * again when the pointer leaves.
+ * clicking it reports the selection. The globe can be dragged, glides on
+ * release, and shows the whole Earth again when the pointer leaves.
  *
- * Coastlines are painted on a canvas; the coloured countries are SVG shapes
- * so that they can be hovered, focused and clicked. Positions are written
- * straight to the elements on every frame, outside React rendering.
+ * The globe is a round lens of fixed size: zooming magnifies what is inside
+ * it. Coastlines are painted on a canvas; the coloured countries are SVG
+ * shapes so that they can be hovered, focused and clicked. Positions are
+ * written straight to the elements on every frame, outside React rendering.
  */
 export function Globe({
   atlas,
@@ -115,14 +126,20 @@ export function Globe({
 }: Props) {
   const frame = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
+  const tooltip = useRef<HTMLDivElement>(null);
   const regionPaths = useRef(new Map<string, SVGPathElement>());
   const markers = useRef(new Map<string, SVGGElement>());
   const labels = useRef(new Map<string, SVGTextElement>());
   const selectedPath = useRef<SVGPathElement>(null);
   const contextPath = useRef<SVGPathElement>(null);
 
-  const view = useRef<GlobeView>({ centre: [home[0], home[1]], zoom: 1 });
-  const flight = useRef(0);
+  const reducedMotion = useMemo(prefersReducedMotion, []);
+  // The globe turns into place when it first appears.
+  const view = useRef<GlobeView>({
+    centre: reducedMotion ? [home[0], home[1]] : [wrapLongitude(home[0] - 70), home[1] - 12],
+    zoom: 1,
+  });
+  const animation = useRef(0);
   const flying = useRef(false);
   const focusedId = useRef<string | null>(null);
   const pointer = useRef<Point | null>(null);
@@ -130,10 +147,11 @@ export function Globe({
   const hover = useRef<{ id: string; timer: number } | null>(null);
   const leaveTimer = useRef(0);
   const settleTimer = useRef(0);
-  const drag = useRef<(Point & { moved: boolean }) | null>(null);
+  const drag = useRef<(Point & { moved: boolean; time: number }) | null>(null);
+  const velocity = useRef({ longitude: 0, latitude: 0 });
   const suppressClick = useRef(false);
 
-  const [tip, setTip] = useState<Tip | null>(null);
+  const [hovered, setHovered] = useState<GlobeRegion | null>(null);
 
   const countryById = useMemo(
     () => new Map(atlas.countries.map((country) => [country.id, country])),
@@ -165,20 +183,23 @@ export function Globe({
     ]);
     const path = geoPath(projection);
     const { regions: shown, labelled: names, selectedId: selected, contextId } = scene.current;
+    const areas = new Map<string, number>();
 
     for (const region of shown) {
       const country = countryById.get(region.id);
       if (!country) continue;
       regionPaths.current.get(region.id)?.setAttribute('d', path(country.shape) ?? '');
+      const area = path.area(country.shape);
+      areas.set(region.id, area);
       const marker = markers.current.get(region.id);
       if (!marker) continue;
       const facing = geoDistance(country.focus.centre, current.centre) < HORIZON;
       const point = facing ? projection(country.focus.centre) : null;
-      if (point && path.area(country.shape) < SMALL_AREA) {
+      if (point && area < SMALL_AREA) {
         marker.setAttribute('transform', `translate(${point[0]},${point[1]})`);
-        marker.style.display = '';
+        marker.style.opacity = '1';
       } else {
-        marker.style.display = 'none';
+        marker.style.opacity = '0';
       }
     }
 
@@ -194,20 +215,20 @@ export function Globe({
       const element = labels.current.get(id);
       const shape = countryById.get(id)?.shape;
       if (!element || !shape) continue;
-      const roomy = id === contextId || path.area(shape) >= LABEL_AREA;
+      const roomy = id === contextId || (areas.get(id) ?? path.area(shape)) >= LABEL_AREA;
       const facing = geoDistance(anchor.at, current.centre) < HORIZON;
       const point = roomy && facing ? projection(anchor.at) : null;
       if (point) {
         element.setAttribute('x', String(point[0]));
         element.setAttribute('y', String(point[1]));
-        element.style.display = '';
+        element.style.opacity = '1';
       } else {
-        element.style.display = 'none';
+        element.style.opacity = '0';
       }
     }
   }, [countryById]);
 
-  /** Paint ocean, graticule, land and borders. */
+  /** Paint graticule, land and borders; the ocean is the lens background. */
   const drawBase = useCallback(
     (detailed: boolean) => {
       const element = canvas.current;
@@ -228,31 +249,20 @@ export function Globe({
       context.lineJoin = 'round';
 
       context.beginPath();
-      path(SPHERE);
-      context.fillStyle = colour('--globe-ocean');
-      context.fill();
-
-      context.beginPath();
       path(GRATICULE);
-      context.lineWidth = 0.5;
+      context.lineWidth = 0.6;
       context.strokeStyle = colour('--globe-graticule');
       context.stroke();
 
       context.beginPath();
       path(base.land);
-      context.fillStyle = colour('--map-land');
+      context.fillStyle = colour('--globe-land');
       context.fill();
 
       context.beginPath();
       path(base.borders);
-      context.lineWidth = 0.6;
+      context.lineWidth = 0.7;
       context.strokeStyle = colour('--globe-border');
-      context.stroke();
-
-      context.beginPath();
-      path(SPHERE);
-      context.lineWidth = 1;
-      context.strokeStyle = colour('--axis');
       context.stroke();
     },
     [atlas],
@@ -266,11 +276,16 @@ export function Globe({
     [drawShapes, drawBase],
   );
 
-  /** Turn and zoom the globe to a view, then run `whenDone`. */
+  const stopMotion = useCallback(() => {
+    cancelAnimationFrame(animation.current);
+    window.clearTimeout(settleTimer.current);
+    flying.current = false;
+  }, []);
+
+  /** Turn and zoom the globe to a view. */
   const flyTo = useCallback(
-    (target: GlobeView, duration = FLIGHT_MS, whenDone?: () => void) => {
-      cancelAnimationFrame(flight.current);
-      window.clearTimeout(settleTimer.current);
+    (target: GlobeView, { duration = FOCUS_MS, ease = easeInOut, whenDone }: Flight = {}) => {
+      stopMotion();
       const from = view.current;
       const finish = () => {
         view.current = target;
@@ -279,11 +294,17 @@ export function Globe({
         draw(true);
         whenDone?.();
       };
-      if (duration === 0 || prefersReducedMotion()) {
+      if (duration === 0 || reducedMotion) {
         finish();
         return;
       }
       const along = geoInterpolate(from.centre, target.centre);
+      // Between two close-up views the globe pulls back on the way, so that
+      // the turn stays readable.
+      const pullBack =
+        0.4 *
+        Math.min(1, geoDistance(from.centre, target.centre) / 0.9) *
+        Math.min(1, Math.max(0, Math.min(from.zoom, target.zoom) - 1) / 1.5);
       const start = performance.now();
       flying.current = true;
       const step = (now: number) => {
@@ -292,23 +313,24 @@ export function Globe({
           finish();
           return;
         }
-        const eased = easeInOut(progress);
+        const eased = ease(progress);
         const [longitude, latitude] = along(eased);
+        const direct = from.zoom * (target.zoom / from.zoom) ** eased;
         view.current = {
           centre: [longitude, latitude],
-          zoom: from.zoom * (target.zoom / from.zoom) ** eased,
+          zoom: Math.max(MIN_ZOOM, direct * (1 - pullBack * Math.sin(Math.PI * eased))),
         };
         draw(false);
-        flight.current = requestAnimationFrame(step);
+        animation.current = requestAnimationFrame(step);
       };
-      flight.current = requestAnimationFrame(step);
+      animation.current = requestAnimationFrame(step);
     },
-    [draw],
+    [draw, reducedMotion, stopMotion],
   );
 
   const flyHome = useCallback(() => {
     focusedId.current = null;
-    flyTo({ centre: [home[0], home[1]], zoom: 1 });
+    flyTo({ centre: [home[0], home[1]], zoom: 1 }, { duration: HOME_MS });
   }, [flyTo, home]);
 
   const focusRegion = useCallback(
@@ -316,10 +338,45 @@ export function Globe({
       const country = countryById.get(id);
       if (!country || focusedId.current === id) return;
       focusedId.current = id;
-      flyTo(country.focus);
+      flyTo(country.focus, { ease: easeOut });
     },
     [countryById, flyTo],
   );
+
+  /** Let a released globe keep turning and slow down. */
+  const glide = useCallback(() => {
+    const speed = Math.hypot(velocity.current.longitude, velocity.current.latitude);
+    if (reducedMotion || speed < GLIDE_MIN_SPEED) {
+      draw(true);
+      return;
+    }
+    flying.current = true;
+    let last = performance.now();
+    const step = (now: number) => {
+      const elapsed = now - last;
+      last = now;
+      const decay = Math.exp(-elapsed / GLIDE_MS);
+      velocity.current.longitude *= decay;
+      velocity.current.latitude *= decay;
+      const current = view.current;
+      view.current = {
+        centre: [
+          wrapLongitude(current.centre[0] + velocity.current.longitude * elapsed),
+          Math.max(-85, Math.min(85, current.centre[1] + velocity.current.latitude * elapsed)),
+        ],
+        zoom: current.zoom,
+      };
+      if (Math.hypot(velocity.current.longitude, velocity.current.latitude) < GLIDE_MIN_SPEED / 4) {
+        flying.current = false;
+        restingAt.current = pointer.current;
+        draw(true);
+        return;
+      }
+      draw(false);
+      animation.current = requestAnimationFrame(step);
+    };
+    animation.current = requestAnimationFrame(step);
+  }, [draw, reducedMotion]);
 
   const clearHover = useCallback(() => {
     if (hover.current) window.clearTimeout(hover.current.timer);
@@ -357,19 +414,21 @@ export function Globe({
     drawBase(!flying.current);
   }, [drawBase, mode]);
 
-  // A new default centre (the other map view) brings the whole globe back.
-  const firstHome = useRef(true);
+  // Turn into place on arrival; a new default centre (the other map view)
+  // brings the whole globe back.
+  const arrived = useRef(false);
   useEffect(() => {
-    if (firstHome.current) {
-      firstHome.current = false;
+    if (arrived.current) {
+      flyHome();
       return;
     }
-    flyHome();
-  }, [flyHome]);
+    arrived.current = true;
+    flyTo({ centre: [home[0], home[1]], zoom: 1 }, { duration: ENTRANCE_MS, ease: easeOut });
+  }, [flyHome, flyTo, home]);
 
   useEffect(
     () => () => {
-      cancelAnimationFrame(flight.current);
+      cancelAnimationFrame(animation.current);
       window.clearTimeout(leaveTimer.current);
       window.clearTimeout(settleTimer.current);
       clearHover();
@@ -377,22 +436,39 @@ export function Globe({
     [clearHover],
   );
 
-  function tipAt(region: GlobeRegion, x: number, y: number) {
+  function placeTooltip(x: number, y: number) {
     const box = frame.current?.getBoundingClientRect();
-    if (!box) return;
-    setTip({ region, x: x - box.left, y: y - box.top, flip: x - box.left > box.width * 0.6 });
+    const element = tooltip.current;
+    if (!box || !element) return;
+    const left = x - box.left;
+    const flip = left > box.width * 0.58;
+    element.style.transform = `translate3d(${left}px, ${y - box.top}px, 0) translate(${
+      flip ? 'calc(-100% - 14px)' : '14px'
+    }, 14px)`;
   }
 
-  function rotateBy(dx: number, dy: number) {
+  function rotateBy(dx: number, dy: number, elapsed: number) {
     const current = view.current;
     const degreesPerUnit = 180 / (Math.PI * BASE_SCALE * current.zoom);
     const unitsPerPixel = GLOBE_SIZE / (frame.current?.clientWidth || GLOBE_SIZE);
-    const longitude = current.centre[0] - dx * unitsPerPixel * degreesPerUnit;
-    const latitude = current.centre[1] + dy * unitsPerPixel * degreesPerUnit;
+    const turn = {
+      longitude: -dx * unitsPerPixel * degreesPerUnit,
+      latitude: dy * unitsPerPixel * degreesPerUnit,
+    };
     view.current = {
-      centre: [((((longitude + 180) % 360) + 360) % 360) - 180, Math.max(-85, Math.min(85, latitude))],
+      centre: [
+        wrapLongitude(current.centre[0] + turn.longitude),
+        Math.max(-85, Math.min(85, current.centre[1] + turn.latitude)),
+      ],
       zoom: current.zoom,
     };
+    if (elapsed > 0) {
+      // Blend with the previous sample so that one jittery move does not set the glide.
+      velocity.current = {
+        longitude: 0.6 * (turn.longitude / elapsed) + 0.4 * velocity.current.longitude,
+        latitude: 0.6 * (turn.latitude / elapsed) + 0.4 * velocity.current.latitude,
+      };
+    }
     draw(false);
     window.clearTimeout(settleTimer.current);
     settleTimer.current = window.setTimeout(() => drawBase(true), 160);
@@ -400,8 +476,8 @@ export function Globe({
 
   function onPointerDown(event: PointerEvent) {
     suppressClick.current = false;
-    if (event.button !== 0) return;
-    drag.current = { x: event.clientX, y: event.clientY, moved: false };
+    if (event.button !== 0 || (event.target as Element).closest('button')) return;
+    drag.current = { x: event.clientX, y: event.clientY, moved: false, time: event.timeStamp };
   }
 
   function onPointerMove(event: PointerEvent) {
@@ -414,21 +490,22 @@ export function Globe({
       const dy = event.clientY - pressed.y;
       if (!pressed.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
       if (!pressed.moved) {
-        cancelAnimationFrame(flight.current);
-        flying.current = false;
+        stopMotion();
+        velocity.current = { longitude: 0, latitude: 0 };
         focusedId.current = null;
         clearHover();
-        setTip(null);
+        setHovered(null);
       }
-      drag.current = { x: event.clientX, y: event.clientY, moved: true };
-      rotateBy(dx, dy);
+      const elapsed = event.timeStamp - pressed.time;
+      drag.current = { x: event.clientX, y: event.clientY, moved: true, time: event.timeStamp };
+      rotateBy(dx, dy, elapsed);
       return;
     }
 
     const id = regionIdAt(event.target);
     const region = id ? regionById.get(id) : undefined;
-    if (region) tipAt(region, event.clientX, event.clientY);
-    else setTip(null);
+    setHovered(region ?? null);
+    if (region) placeTooltip(event.clientX, event.clientY);
 
     // Hovering zooms in only after the pointer has really moved since the
     // globe last came to rest.
@@ -453,20 +530,22 @@ export function Globe({
     };
   }
 
-  function endDrag() {
-    if (drag.current?.moved) {
-      suppressClick.current = true;
-      restingAt.current = pointer.current;
-      window.clearTimeout(settleTimer.current);
-      draw(true);
-    }
+  function endDrag(event: PointerEvent) {
+    const pressed = drag.current;
     drag.current = null;
+    if (!pressed?.moved) return;
+    suppressClick.current = true;
+    restingAt.current = pointer.current;
+    window.clearTimeout(settleTimer.current);
+    // A pause before release means the globe was set down, not thrown.
+    if (event.timeStamp - pressed.time > 90) velocity.current = { longitude: 0, latitude: 0 };
+    glide();
   }
 
   function onPointerLeave(event: PointerEvent) {
-    endDrag();
+    endDrag(event);
     clearHover();
-    setTip(null);
+    setHovered(null);
     // Lifting a finger also "leaves"; a touch view stays until reset or a tap
     // outside the coloured countries.
     if (event.pointerType === 'touch') return;
@@ -504,7 +583,7 @@ export function Globe({
     focusedId.current = null;
     flyTo(
       { centre: view.current.centre, zoom: clampZoom(view.current.zoom * factor) },
-      BUTTON_ZOOM_MS,
+      { duration: BUTTON_ZOOM_MS },
     );
   }
 
@@ -514,6 +593,8 @@ export function Globe({
       else store.delete(id);
     };
   }
+
+  const fillOf = (region: GlobeRegion) => scale.color(region.value) ?? 'url(#globe-no-data)';
 
   return (
     <div
@@ -525,6 +606,8 @@ export function Globe({
       onPointerCancel={endDrag}
       onPointerLeave={onPointerLeave}
     >
+      <div className="globe-halo" aria-hidden="true" />
+      <div className="globe-ocean" aria-hidden="true" />
       <canvas ref={canvas} className="globe-canvas" aria-hidden="true" />
       <svg
         className="globe-shapes"
@@ -534,8 +617,11 @@ export function Globe({
         onClick={onClick}
       >
         <defs>
+          <clipPath id="globe-lens">
+            <circle cx={CENTRE} cy={CENTRE} r={BASE_SCALE} />
+          </clipPath>
           <pattern
-            id="map-no-data"
+            id="globe-no-data"
             width="6"
             height="6"
             patternUnits="userSpaceOnUse"
@@ -544,45 +630,66 @@ export function Globe({
             <rect width="6" height="6" className="map-no-data-ground" />
             <line x1="0" y1="0" x2="0" y2="6" className="map-no-data-line" />
           </pattern>
+          {/* Light from the upper left and a darker rim give the disc its roundness. */}
+          <radialGradient id="globe-shade" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0.64" className="globe-shade-centre" />
+            <stop offset="0.89" className="globe-shade-mid" />
+            <stop offset="1" className="globe-shade-rim" />
+          </radialGradient>
+          <radialGradient id="globe-light" cx="0.32" cy="0.26" r="0.62">
+            <stop offset="0" className="globe-light-near" />
+            <stop offset="1" className="globe-light-far" />
+          </radialGradient>
         </defs>
 
-        <path ref={contextPath} className="map-context" aria-hidden="true" />
-
-        <g>
-          {regions.map((region) => (
-            <path
-              key={region.id}
-              ref={setRef(regionPaths.current, region.id)}
-              data-region={region.id}
-              className="map-region"
-              fill={scale.color(region.value) ?? 'url(#map-no-data)'}
-              tabIndex={0}
-              role="button"
-              aria-label={`${text.select(region.name)}. ${tooltipContext}: ${region.valueText}`}
-              onFocus={() => focusRegion(region.id)}
-              onKeyDown={(event) => onKeyDown(event, region)}
-            />
-          ))}
-        </g>
-
-        <g aria-hidden="true">
-          {regions.map((region) => (
-            <g key={region.id} ref={setRef(markers.current, region.id)} style={{ display: 'none' }}>
-              <circle
-                r={MARKER_RADIUS}
-                className="map-marker"
-                fill={scale.color(region.value) ?? 'url(#map-no-data)'}
+        <g clipPath="url(#globe-lens)">
+          <path ref={contextPath} className="map-context" aria-hidden="true" />
+          <g>
+            {regions.map((region) => (
+              <path
+                key={region.id}
+                ref={setRef(regionPaths.current, region.id)}
+                data-region={region.id}
+                className="map-region"
+                style={{ fill: fillOf(region) }}
+                tabIndex={0}
+                role="button"
+                aria-label={`${text.select(region.name)}. ${tooltipContext}: ${region.valueText}`}
+                onFocus={() => focusRegion(region.id)}
+                onKeyDown={(event) => onKeyDown(event, region)}
               />
-              <circle r={MARKER_RADIUS * 2.4} className="map-marker-hit" data-region={region.id} />
-            </g>
-          ))}
+            ))}
+          </g>
+          <g aria-hidden="true">
+            {regions.map((region) => (
+              <g
+                key={region.id}
+                ref={setRef(markers.current, region.id)}
+                className="map-marker-group"
+                style={{ opacity: 0 }}
+              >
+                <circle r={MARKER_RADIUS} className="map-marker" style={{ fill: fillOf(region) }} />
+                <circle r={MARKER_RADIUS * 2.6} className="map-marker-hit" data-region={region.id} />
+              </g>
+            ))}
+          </g>
+          <path ref={selectedPath} className="map-selected" aria-hidden="true" />
         </g>
 
-        <path ref={selectedPath} className="map-selected" aria-hidden="true" />
+        <g aria-hidden="true" className="globe-relief">
+          <circle cx={CENTRE} cy={CENTRE} r={BASE_SCALE} fill="url(#globe-light)" />
+          <circle cx={CENTRE} cy={CENTRE} r={BASE_SCALE} fill="url(#globe-shade)" />
+          <circle cx={CENTRE} cy={CENTRE} r={BASE_SCALE - 0.5} className="globe-rim" />
+        </g>
 
-        <g aria-hidden="true" className="map-labels">
+        <g aria-hidden="true" className="map-labels" clipPath="url(#globe-lens)">
           {labelled.map(({ id, name, anchor }) => (
-            <text key={id} ref={setRef(labels.current, id)} textAnchor={anchor.align}>
+            <text
+              key={id}
+              ref={setRef(labels.current, id)}
+              textAnchor={anchor.align}
+              style={{ opacity: 0 }}
+            >
               {name}
             </text>
           ))}
@@ -590,28 +697,47 @@ export function Globe({
       </svg>
 
       <div className="globe-buttons">
-        <button type="button" aria-label={text.zoomIn} title={text.zoomIn} onClick={() => zoomBy(BUTTON_ZOOM_FACTOR)}>
-          +
+        <button
+          type="button"
+          aria-label={text.zoomIn}
+          title={text.zoomIn}
+          onClick={() => zoomBy(BUTTON_ZOOM_FACTOR)}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 3v10M3 8h10" />
+          </svg>
         </button>
-        <button type="button" aria-label={text.zoomOut} title={text.zoomOut} onClick={() => zoomBy(1 / BUTTON_ZOOM_FACTOR)}>
-          −
+        <button
+          type="button"
+          aria-label={text.zoomOut}
+          title={text.zoomOut}
+          onClick={() => zoomBy(1 / BUTTON_ZOOM_FACTOR)}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3 8h10" />
+          </svg>
         </button>
         <button type="button" aria-label={text.reset} title={text.reset} onClick={flyHome}>
-          ⟲
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="5.5" />
+            <path d="M2.5 8h11M8 2.5c2 2 2 9 0 11M8 2.5c-2 2-2 9 0 11" />
+          </svg>
         </button>
       </div>
 
-      {tip ? (
-        <div
-          className={`tooltip${tip.flip ? ' is-flipped' : ''}`}
-          style={{ left: tip.x, top: tip.y }}
-          role="presentation"
-        >
-          <strong>{tip.region.valueText}</strong>
-          <span>{tip.region.name}</span>
-          <span className="tooltip-context">{tooltipContext}</span>
-        </div>
-      ) : null}
+      <div
+        ref={tooltip}
+        className={`tooltip globe-tooltip${hovered ? ' is-visible' : ''}`}
+        role="presentation"
+      >
+        {hovered ? (
+          <>
+            <strong>{hovered.valueText}</strong>
+            <span>{hovered.name}</span>
+            <span className="tooltip-context">{tooltipContext}</span>
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

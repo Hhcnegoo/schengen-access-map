@@ -8,7 +8,7 @@ import type { Locale } from './format';
 const en = {
   'app.title': 'Schengen Access Map',
   'app.subtitle':
-    'Uniform visa statistics for consulates of the Schengen States located in seven countries, 2019–2025',
+    'Uniform visa statistics for consulates of the Schengen States located in seven countries, 2019–\u20602025',
   'app.lead':
     'Figures come from the European Commission’s yearly “Visa statistics for consulates” files. They describe consulates by location, not applicants by nationality.',
   'app.skip': 'Skip to content',
@@ -16,7 +16,12 @@ const en = {
   'lang.en': 'English',
   'lang.ru': 'Русский',
 
+  'app.overline': 'European Commission visa statistics · 2019–2025',
   'controls.label': 'Display settings',
+  'controls.play': 'Play the years in turn',
+  'controls.pause': 'Pause',
+  'info.close': 'Clear the choice',
+  'info.overline.states': 'Schengen State',
   'controls.year': 'Year',
   'controls.metric': 'Indicator',
   'controls.country': 'Country of consulate location',
@@ -45,7 +50,7 @@ const en = {
 
   'map.title': '{metric}, {year}',
   'map.view.label': 'Map shows',
-  'map.view.countries': 'Countries of consulate location',
+  'map.view.countries': 'Consulate countries',
   'map.view.states': 'Schengen States',
   'map.caption.countries': 'Consulates of all listed Schengen States, by country where they are located.',
   'map.caption.states':
@@ -169,7 +174,7 @@ export type MessageKey = keyof typeof en;
 const ru: Record<MessageKey, string> = {
   'app.title': 'Schengen Access Map',
   'app.subtitle':
-    'Статистика единых виз по консульствам государств Шенгенской зоны в семи странах, 2019–2025',
+    'Статистика единых виз по консульствам государств Шенгенской зоны в семи странах, 2019–\u20602025',
   'app.lead':
     'Данные взяты из ежегодных файлов Европейской комиссии «Visa statistics for consulates». Они описывают консульства по месту расположения, а не заявителей по гражданству.',
   'app.skip': 'Перейти к содержанию',
@@ -177,7 +182,12 @@ const ru: Record<MessageKey, string> = {
   'lang.en': 'English',
   'lang.ru': 'Русский',
 
+  'app.overline': 'Визовая статистика Европейской комиссии · 2019–2025',
   'controls.label': 'Параметры отображения',
+  'controls.play': 'Показать годы по очереди',
+  'controls.pause': 'Пауза',
+  'info.close': 'Сбросить выбор',
+  'info.overline.states': 'Государство Шенгенской зоны',
   'controls.year': 'Год',
   'controls.metric': 'Показатель',
   'controls.country': 'Страна расположения консульств',
@@ -206,8 +216,8 @@ const ru: Record<MessageKey, string> = {
 
   'map.title': '{metric}, {year}',
   'map.view.label': 'На карте',
-  'map.view.countries': 'Страны расположения консульств',
-  'map.view.states': 'Государства Шенгенской зоны',
+  'map.view.countries': 'Страны консульств',
+  'map.view.states': 'Шенгенские государства',
   'map.caption.countries':
     'Консульства всех перечисленных в источнике государств Шенгенской зоны — по стране, где они расположены.',
   'map.caption.states':

@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react';
 import { BreakdownTable } from './components/BreakdownTable';
 import { CompareTable } from './components/CompareTable';
-import { Controls } from './components/Controls';
+import { Controls, CountrySelect } from './components/Controls';
 import { Globe } from './components/Globe';
 import type { GlobeRegion } from './components/Globe';
 import { InfoPanel } from './components/InfoPanel';
 import type { InfoRow } from './components/InfoPanel';
 import { MapLegend } from './components/MapLegend';
 import { Methodology } from './components/Methodology';
+import { Reveal } from './components/Reveal';
 import { StatTiles } from './components/StatTiles';
 import { TrendCharts } from './components/TrendCharts';
+import { ALL_COUNTRIES } from './data/dataset';
 import type { Dataset } from './data/dataset';
 import type { MeasureField, Measures } from './data/types';
 import { LOCALES, formatCount } from './i18n/format';
@@ -106,22 +108,20 @@ function Page({ dataset, state, update }: PageProps) {
       label: t(`metric.${field}`),
       value: measure(field, row[field]),
       missing: row[field] === null,
+      active: field === metric,
     }));
+  const detailsLink = (
+    <p className="info-more">
+      <a href="#detail-title">{t('map.info.details')}</a>
+    </p>
+  );
+  // The card beside the globe: the chosen country or State, or the seven
+  // countries combined while nothing is chosen.
   const info =
-    view === 'countries'
-      ? selectedCountry && summary
+    view === 'states'
+      ? picked
         ? {
-            title: t('map.info.title', { name: selectionName, year }),
-            rows: infoRows(summary),
-            footer: (
-              <p className="note">
-                <a href="#detail-title">{t('map.info.details')}</a>
-              </p>
-            ),
-          }
-        : { title: null, rows: [] }
-      : picked
-        ? {
+            overline: t('info.overline.states'),
             title: t('map.info.title', { name: name(picked), year }),
             subtitle: t('map.info.located', { selection: selectionName }),
             rows: pickedRow
@@ -135,20 +135,30 @@ function Page({ dataset, state, update }: PageProps) {
                 ]
               : [],
             message: pickedRow ? undefined : t('map.info.notListed'),
+            onClose: () => setPickedState(null),
           }
-        : { title: null, rows: [] };
+        : {
+            overline: t('info.overline.states'),
+            title: null,
+            subtitle: t('map.info.located', { selection: selectionName }),
+            rows: [],
+          }
+      : {
+          title: t('map.info.title', { name: selectionName, year }),
+          rows: summary ? infoRows(summary) : [],
+          footer: detailsLink,
+          onClose: selectedCountry ? () => update({ selection: ALL_COUNTRIES }) : undefined,
+        };
 
   return (
     <>
       <a className="skip-link" href="#main">
         {t('app.skip')}
       </a>
-      <header className="site-header">
-        <div>
-          <h1>{t('app.title')}</h1>
-          <p className="subtitle">{t('app.subtitle')}</p>
-        </div>
-        <div className="segmented" role="group" aria-label={t('lang.label')}>
+      <div className="backdrop" aria-hidden="true" />
+      <header className="topbar">
+        <p className="overline brand">{t('app.overline')}</p>
+        <div className="segmented is-compact" role="group" aria-label={t('lang.label')}>
           {LOCALES.map((option) => (
             <button
               key={option}
@@ -163,93 +173,102 @@ function Page({ dataset, state, update }: PageProps) {
         </div>
       </header>
 
-      <main id="main">
-        <p className="lead">{t('app.lead')}</p>
+      <main id="main" className="page">
+        <div className="intro">
+          <h1>{t('app.title')}</h1>
+          <p className="subtitle">{t('app.subtitle')}</p>
+          <p className="lead">{t('app.lead')}</p>
+        </div>
 
         <Controls
           dataset={dataset}
           year={year}
           metric={metric}
-          selection={selection}
           onYear={(next) => update({ year: next })}
           onMetric={(next) => update({ metric: next })}
-          onSelect={(next) => update({ selection: next })}
         />
 
-        <section className="card" aria-labelledby="map-title">
-          <div className="card-head">
+        <section className="stage" aria-labelledby="map-title">
+          <div className="stage-head">
             <h2 id="map-title">{t('map.title', { metric: metricName, year })}</h2>
-            <div className="control">
-              <span className="control-label" id="control-view">
-                {t('map.view.label')}
-              </span>
-              <div className="segmented" role="group" aria-labelledby="control-view">
-                {MAP_VIEWS.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    aria-pressed={option === view}
-                    onClick={() => update({ view: option })}
-                  >
-                    {t(`map.view.${option}`)}
-                  </button>
-                ))}
-              </div>
+            <p className="note">
+              {view === 'countries'
+                ? t('map.caption.countries')
+                : t('map.caption.states', { selection: selectionName })}
+            </p>
+          </div>
+          {atlas.status === 'ready' ? (
+            <Globe
+              atlas={atlas.atlas}
+              regions={regions}
+              scale={view === 'countries' ? countryScale : stateScale}
+              mode={mode}
+              selectedId={
+                view === 'countries' ? (selectedCountry?.iso_n3 ?? null) : (picked?.iso_n3 ?? null)
+              }
+              contextRegion={
+                view === 'states' && selectedCountry
+                  ? {
+                      id: selectedCountry.iso_n3,
+                      name: selectionName,
+                      label: labelFor(selectedCountry.iso3),
+                    }
+                  : null
+              }
+              home={HOME_CENTRE[view]}
+              ariaLabel={t('map.aria', { metric: metricName, year })}
+              tooltipContext={`${metricName}, ${year}`}
+              text={{
+                zoomIn: t('map.zoomIn'),
+                zoomOut: t('map.zoomOut'),
+                reset: t('map.reset'),
+                select: (regionName) => t('map.select', { name: regionName }),
+              }}
+              onSelect={(key) =>
+                view === 'countries' ? update({ selection: key }) : setPickedState(key)
+              }
+            />
+          ) : (
+            <div className="globe-frame is-placeholder" role="status">
+              {atlas.status === 'loading' ? t('map.loading') : t('map.error')}
             </div>
+          )}
+          <div className="stage-dock">
+            <div className="segmented is-compact" role="group" aria-label={t('map.view.label')}>
+              {MAP_VIEWS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  aria-pressed={option === view}
+                  onClick={() => update({ view: option })}
+                >
+                  {t(`map.view.${option}`)}
+                </button>
+              ))}
+            </div>
+            <MapLegend
+              field={metric}
+              scale={view === 'countries' ? countryScale : stateScale}
+              showNotListed={view === 'states'}
+            />
           </div>
-          <p className="note">
-            {view === 'countries'
-              ? t('map.caption.countries')
-              : t('map.caption.states', { selection: selectionName })}
-          </p>
-          <div className="globe-layout">
-            {atlas.status === 'ready' ? (
-              <Globe
-                atlas={atlas.atlas}
-                regions={regions}
-                scale={view === 'countries' ? countryScale : stateScale}
-                mode={mode}
-                selectedId={
-                  view === 'countries' ? (selectedCountry?.iso_n3 ?? null) : (picked?.iso_n3 ?? null)
-                }
-                contextRegion={
-                  view === 'states' && selectedCountry
-                    ? {
-                        id: selectedCountry.iso_n3,
-                        name: selectionName,
-                        label: labelFor(selectedCountry.iso3),
-                      }
-                    : null
-                }
-                home={HOME_CENTRE[view]}
-                ariaLabel={t('map.aria', { metric: metricName, year })}
-                tooltipContext={`${metricName}, ${year}`}
-                text={{
-                  zoomIn: t('map.zoomIn'),
-                  zoomOut: t('map.zoomOut'),
-                  reset: t('map.reset'),
-                  select: (regionName) => t('map.select', { name: regionName }),
-                }}
-                onSelect={(key) =>
-                  view === 'countries' ? update({ selection: key }) : setPickedState(key)
-                }
-              />
-            ) : (
-              <div className="globe-frame is-placeholder" role="status">
-                {atlas.status === 'loading' ? t('map.loading') : t('map.error')}
-              </div>
-            )}
-            <InfoPanel {...info} hint={t('map.hint')} />
-          </div>
-          <MapLegend
-            field={metric}
-            scale={view === 'countries' ? countryScale : stateScale}
-            showNotListed={view === 'states'}
-          />
-          <p className="note">{t('map.boundaries')}</p>
+          <p className="note is-fine">{t('map.boundaries')}</p>
         </section>
 
-        <section className="card" aria-labelledby="compare-title">
+        <InfoPanel
+          {...info}
+          control={
+            <CountrySelect
+              dataset={dataset}
+              selection={selection}
+              onSelect={(next) => update({ selection: next })}
+            />
+          }
+          hint={t('map.hint')}
+          closeLabel={t('info.close')}
+        />
+
+        <Reveal className="card" aria-labelledby="compare-title">
           <h2 id="compare-title">{t('compare.title')}</h2>
           <CompareTable
             dataset={dataset}
@@ -260,13 +279,15 @@ function Page({ dataset, state, update }: PageProps) {
             onSelect={(next) => update({ selection: next })}
             onYear={(next) => update({ year: next })}
           />
-        </section>
+        </Reveal>
 
-        <section className="card" aria-labelledby="detail-title">
+        <Reveal className="card" aria-labelledby="detail-title">
           <h2 id="detail-title">{t('detail.title', { selection: selectionName, year })}</h2>
           {summary ? (
             <StatTiles
               row={summary}
+              metric={metric}
+              animationKey={`${selection}|${year}`}
               sourceRateOverApplications={
                 dataset.data.meta.source_not_issued_rate_denominator[String(year)] ===
                 'applications'
@@ -285,7 +306,7 @@ function Page({ dataset, state, update }: PageProps) {
             selectionName={selectionName}
             year={year}
           />
-        </section>
+        </Reveal>
 
         <Methodology dataset={dataset} />
       </main>

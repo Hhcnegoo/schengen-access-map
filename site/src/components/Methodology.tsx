@@ -1,6 +1,7 @@
 import type { Dataset } from '../data/dataset';
 import { useI18n } from '../i18n/I18nContext';
 import type { MessageKey } from '../i18n/messages';
+import { Reveal } from './Reveal';
 
 const DOWNLOADS = [
   'country_year',
@@ -48,7 +49,7 @@ export function Methodology({ dataset }: { dataset: Dataset }) {
   const renamedCities = dataset.data.consulates.filter((city) => city.source_names.length > 1);
 
   return (
-    <section className="method" aria-labelledby="method-title">
+    <Reveal className="method" aria-labelledby="method-title">
       <h2 id="method-title">{t('method.title')}</h2>
       <div className="method-grid">
         <section>
@@ -150,6 +151,6 @@ export function Methodology({ dataset }: { dataset: Dataset }) {
           </ul>
         </section>
       </div>
-    </section>
+    </Reveal>
   );
 }

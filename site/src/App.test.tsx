@@ -1,5 +1,5 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { BreakdownTable, sortRows } from './components/BreakdownTable';
 import { axisFor } from './components/TrendCharts';
@@ -97,8 +97,12 @@ describe('page', () => {
     open('#lang=en&year=2024&metric=uniform_applied&country=ALL&view=countries');
     const map = await screen.findByRole('group', { name: /^Map:/ }, { timeout: 10000 });
     const panel = screen.getByRole('complementary');
-    expect(within(panel).queryByRole('heading')).toBeNull();
+    // Until a country is chosen the card lists the seven countries combined.
+    expect(within(panel).getByRole('heading', { name: 'All seven countries, 2024' })).toBeTruthy();
+    const total = dataset.summary(ALL_COUNTRIES, 2024)!;
+    expect(within(panel).getByText(formatCount(total.uniform_applied!, 'en'))).toBeTruthy();
     expect(panel.textContent).toContain('click it to see its figures');
+    expect(within(panel).queryByRole('button', { name: 'Clear the choice' })).toBeNull();
 
     fireEvent.click(within(map).getByRole('button', { name: /^Show Russia/ }));
     expect(within(panel).getByRole('heading', { name: 'Russia, 2024' })).toBeTruthy();
@@ -107,6 +111,10 @@ describe('page', () => {
     expect(within(panel).getByText(formatPercent(row.not_issued_rate!, 'en'))).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: 'Russia, 2024' })).toBeTruthy();
     expect(window.location.hash).toContain('country=RUS');
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Clear the choice' }));
+    expect(within(panel).getByRole('heading', { name: 'All seven countries, 2024' })).toBeTruthy();
+    expect(window.location.hash).toContain('country=ALL');
   });
 
   it('shows the figures of a Schengen State clicked in the States view', async () => {
@@ -124,6 +132,52 @@ describe('page', () => {
     expect(within(panel).getByText('no data')).toBeTruthy();
     // The selected country itself does not change.
     expect(screen.getByRole('heading', { level: 2, name: 'Armenia, 2019' })).toBeTruthy();
+  });
+});
+
+describe('year playback', () => {
+  it('steps through the years and stops at the last one', () => {
+    vi.useFakeTimers();
+    try {
+      open('#lang=en&year=2023&metric=uniform_applied&country=ALL&view=countries');
+      const play = screen.getByRole('button', { name: 'Play the years in turn' });
+      fireEvent.click(play);
+      expect(screen.getByRole('button', { name: 'Pause' }).getAttribute('aria-pressed')).toBe('true');
+      act(() => void vi.advanceTimersByTime(1800));
+      expect(window.location.hash).toContain('year=2024');
+      act(() => void vi.advanceTimersByTime(1800));
+      expect(window.location.hash).toContain('year=2025');
+      act(() => void vi.advanceTimersByTime(1800));
+      expect(window.location.hash).toContain('year=2025');
+      expect(screen.getByRole('button', { name: 'Play the years in turn' })).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('starts over from the first year when played at the last one', () => {
+    vi.useFakeTimers();
+    try {
+      open('#lang=en&year=2025&metric=uniform_applied&country=ALL&view=countries');
+      fireEvent.click(screen.getByRole('button', { name: 'Play the years in turn' }));
+      expect(window.location.hash).toContain('year=2019');
+      fireEvent.click(within(screen.getByRole('group', { name: 'Year' })).getByRole('button', { name: '2022' }));
+      expect(screen.getByRole('button', { name: 'Play the years in turn' })).toBeTruthy();
+      act(() => void vi.advanceTimersByTime(4000));
+      expect(window.location.hash).toContain('year=2022');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('map view', () => {
+  it('switches between consulate countries and Schengen States', () => {
+    open('#lang=en&year=2024&metric=uniform_applied&country=KAZ&view=countries');
+    const toggle = screen.getByRole('group', { name: 'Map shows' });
+    fireEvent.click(within(toggle).getByRole('button', { name: 'Schengen States' }));
+    expect(window.location.hash).toContain('view=states');
+    expect(screen.getByRole('complementary').textContent).toContain('Location of consulates: Kazakhstan');
   });
 });
 
